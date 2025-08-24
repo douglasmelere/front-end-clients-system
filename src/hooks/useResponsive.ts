@@ -1,0 +1,89 @@
+import { useState, useEffect } from 'react';
+
+interface ResponsiveState {
+  isMobile: boolean;
+  isTablet: boolean;
+  isDesktop: boolean;
+  isSmallScreen: boolean;
+  isMediumScreen: boolean;
+  isLargeScreen: boolean;
+  screenWidth: number;
+  screenHeight: number;
+}
+
+export function useResponsive(): ResponsiveState {
+  const [responsiveState, setResponsiveState] = useState<ResponsiveState>({
+    isMobile: false,
+    isTablet: false,
+    isDesktop: false,
+    isSmallScreen: false,
+    isMediumScreen: false,
+    isLargeScreen: false,
+    screenWidth: 0,
+    screenHeight: 0,
+  });
+
+  useEffect(() => {
+    const updateResponsiveness = () => {
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
+      setResponsiveState({
+        isMobile: width < 768,
+        isTablet: width >= 768 && width < 1024,
+        isDesktop: width >= 1024,
+        isSmallScreen: width < 640,
+        isMediumScreen: width >= 640 && width < 1024,
+        isLargeScreen: width >= 1024,
+        screenWidth: width,
+        screenHeight: height,
+      });
+    };
+
+    // Set initial state
+    updateResponsiveness();
+
+    // Add event listener
+    window.addEventListener('resize', updateResponsiveness);
+
+    // Cleanup
+    return () => window.removeEventListener('resize', updateResponsiveness);
+  }, []);
+
+  return responsiveState;
+}
+
+// Hook específico para orientação do dispositivo
+export function useOrientation() {
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  useEffect(() => {
+    const updateOrientation = () => {
+      setOrientation(
+        window.innerHeight > window.innerWidth ? 'portrait' : 'landscape'
+      );
+    };
+
+    updateOrientation();
+    window.addEventListener('resize', updateOrientation);
+    window.addEventListener('orientationchange', updateOrientation);
+
+    return () => {
+      window.removeEventListener('resize', updateOrientation);
+      window.removeEventListener('orientationchange', updateOrientation);
+    };
+  }, []);
+
+  return orientation;
+}
+
+// Hook para detectar se o dispositivo suporta touch
+export function useTouchSupport() {
+  const [isTouchSupported, setIsTouchSupported] = useState(false);
+
+  useEffect(() => {
+    setIsTouchSupported('ontouchstart' in window || navigator.maxTouchPoints > 0);
+  }, []);
+
+  return isTouchSupported;
+}
