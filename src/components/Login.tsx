@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useAuth } from '../hooks/useAuth';
+import { useToast } from '../hooks/useToast';
 import LoadingSpinner from './common/LoadingSpinner';
 import { Zap, Eye, EyeOff, User, Lock, Shield, Leaf, Wind } from 'lucide-react';
 import PagluzLogo from './common/PagluzLogo';
 import { validateEmail, validatePassword, sanitizeInput } from '../utils/security';
 
 export default function Login() {
-  const { auth, toast } = useApp();
+  const { login, loading: authLoading } = useAuth();
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -37,7 +39,7 @@ export default function Login() {
     }
 
     try {
-      await auth.login({ email: sanitizedEmail, password: sanitizedPassword });
+      await login({ email: sanitizedEmail, password: sanitizedPassword });
       toast.showSuccess('Login realizado com sucesso!');
       // O redirecionamento acontece automaticamente via AppContext
     } catch (error: any) {
@@ -132,11 +134,11 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={auth.loading}
+              disabled={authLoading}
               className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] shadow-xl hover:shadow-2xl text-lg group relative overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-green-600 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              {auth.loading ? (
+              {authLoading ? (
                 <div className="flex items-center justify-center relative z-10">
                   <LoadingSpinner size="sm" className="mr-3" />
                   Entrando...

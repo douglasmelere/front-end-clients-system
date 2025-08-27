@@ -1,9 +1,9 @@
 import { api } from './api';
-import { RepresentanteComercial } from '../index';
+import { Representative, RepresentativeStatus } from '../index';
 
 export interface RepresentanteComercialFilters {
   search?: string;
-  status?: string;
+  status?: RepresentativeStatus;
   city?: string;
   state?: string;
   specialization?: string;
@@ -12,6 +12,7 @@ export interface RepresentanteComercialFilters {
 export interface RepresentanteComercialCreate {
   name: string;
   email: string;
+  password: string;
   cpfCnpj: string;
   phone: string;
   city: string;
@@ -29,13 +30,13 @@ export interface RepresentanteComercialUpdate {
   city?: string;
   state?: string;
   commissionRate?: number;
-  status?: 'ACTIVE' | 'INACTIVE' | 'PENDING_APPROVAL';
+  status?: RepresentativeStatus;
   specializations?: string[];
   notes?: string;
 }
 
 export const representanteComercialService = {
-  async getAll(filters?: RepresentanteComercialFilters): Promise<RepresentanteComercial[]> {
+  async getAll(filters?: RepresentanteComercialFilters): Promise<Representative[]> {
     const queryParams = new URLSearchParams();
     
     if (filters) {
@@ -48,15 +49,15 @@ export const representanteComercialService = {
     return api.get(endpoint);
   },
 
-  async getById(id: string): Promise<RepresentanteComercial> {
+  async getById(id: string): Promise<Representative> {
     return api.get(`/representatives/${id}`);
   },
 
-  async create(representante: RepresentanteComercialCreate): Promise<RepresentanteComercial> {
+  async create(representante: RepresentanteComercialCreate): Promise<Representative> {
     return api.post('/representatives', representante);
   },
 
-  async update(id: string, representante: RepresentanteComercialUpdate): Promise<RepresentanteComercial> {
+  async update(id: string, representante: RepresentanteComercialUpdate): Promise<Representative> {
     return api.patch(`/representatives/${id}`, representante);
   },
 
@@ -71,26 +72,104 @@ export const representanteComercialService = {
     totalCommissionRate: number;
     averageCommissionRate: number;
   }> {
-    return api.get('/representatives/statistics');
+    try {
+      const response = await api.get('/representatives/statistics');
+      
+      // Mapear a resposta da API para o formato esperado pelo frontend
+      const byStatus: Record<string, number> = {};
+      if (response.representativesByStatus) {
+        response.representativesByStatus.forEach((item: any) => {
+          byStatus[item.status] = item.count;
+        });
+      }
+      
+      const byState: Record<string, number> = {};
+      if (response.representativesByState) {
+        response.representativesByState.forEach((item: any) => {
+          byState[item.state] = item.count;
+        });
+      }
+      
+      // Calcular taxa média de comissão
+      let totalCommissionRate = 0;
+      let averageCommissionRate = 0;
+      if (response.topRepresentatives && response.topRepresentatives.length > 0) {
+        totalCommissionRate = response.topRepresentatives.reduce((sum: number, rep: any) => sum + rep.commissionRate, 0);
+        averageCommissionRate = totalCommissionRate / response.topRepresentatives.length;
+      }
+      
+      return {
+        total: response.totalRepresentatives || 0,
+        byStatus,
+        byState,
+        totalCommissionRate,
+        averageCommissionRate,
+      };
+    } catch (error: any) {
+      // Se o endpoint não existir ainda, retornar estrutura padrão
+      if (error && typeof error.message === 'string' && (error.message.includes('404') || error.message.toLowerCase().includes('not found'))) {
+        return {
+          total: 0,
+          byStatus: {},
+          byState: {},
+          totalCommissionRate: 0,
+          averageCommissionRate: 0,
+        };
+      }
+      throw error;
+    }
   },
 
-  async getByState(): Promise<Record<string, RepresentanteComercial[]>> {
-    return api.get('/representatives/by-state');
+  async getByState(): Promise<Record<string, Representative[]>> {
+    try {
+      return await api.get('/representatives/by-state');
+    } catch (error: any) {
+      // Se o endpoint não existir, retornar estrutura vazia
+      if (error && typeof error.message === 'string' && (error.message.includes('404') || error.message.toLowerCase().includes('not found'))) {
+        return {};
+      }
+      throw error;
+    }
   },
 
-  async getBySpecialization(): Promise<Record<string, RepresentanteComercial[]>> {
-    return api.get('/representatives/by-specialization');
+  async getBySpecialization(): Promise<Record<string, Representative[]>> {
+    try {
+      return await api.get('/representatives/by-specialization');
+    } catch (error: any) {
+      // Se o endpoint não existir, retornar estrutura vazia
+      if (error && typeof error.message === 'string' && (error.message.includes('404') || error.message.toLowerCase().includes('not found'))) {
+        return {};
+      }
+      throw error;
+    }
   },
 
-  async getActiveRepresentatives(): Promise<RepresentanteComercial[]> {
-    return api.get('/representatives/active');
+  async getActiveRepresentatives(): Promise<Representative[]> {
+    try {
+      return await api.get('/representatives/active');
+    } catch (error: any) {
+      // Se o endpoint não existir, retornar lista vazia
+      if (error && typeof error.message === 'string' && (error.message.includes('404') || error.message.toLowerCase().includes('not found'))) {
+        return [];
+      }
+      throw error;
+    }
   },
 
-  async updateStatus(id: string, status: 'ACTIVE' | 'INACTIVE' | 'PENDING_APPROVAL'): Promise<RepresentanteComercial> {
-    return api.patch(`/representatives/${id}/status`, { status });
+  async updateStatus(id: string, status: RepresentativeStatus): Promise<Representative> {
+    // Usar o endpoint de update geral em vez de um endpoint específico para status
+    return api.patch(`/representatives/${id}`, { status });
   },
 
   async getConsumersByRepresentative(id: string): Promise<any[]> {
-    return api.get(`/representatives/${id}/consumers`);
+    try {
+      return await api.get(`/representatives/${id}/consumers`);
+    } catch (error: any) {
+      // Se o endpoint não existir, retornar lista vazia
+      if (error && typeof error.message === 'string' && (error.message.includes('404') || error.message.toLowerCase().includes('not found'))) {
+        return [];
+      }
+      throw error;
+    }
   }
 };

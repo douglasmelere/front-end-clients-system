@@ -12,15 +12,20 @@ interface ResponsiveState {
 }
 
 export function useResponsive(): ResponsiveState {
-  const [responsiveState, setResponsiveState] = useState<ResponsiveState>({
-    isMobile: false,
-    isTablet: false,
-    isDesktop: false,
-    isSmallScreen: false,
-    isMediumScreen: false,
-    isLargeScreen: false,
-    screenWidth: 0,
-    screenHeight: 0,
+  const [responsiveState, setResponsiveState] = useState<ResponsiveState>(() => {
+    const width = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    const height = typeof window !== 'undefined' ? window.innerHeight : 768;
+    
+    return {
+      isMobile: width < 768,
+      isTablet: width >= 768 && width < 1024,
+      isDesktop: width >= 1024,
+      isSmallScreen: width < 640,
+      isMediumScreen: width >= 640 && width < 1024,
+      isLargeScreen: width >= 1024,
+      screenWidth: width,
+      screenHeight: height,
+    };
   });
 
   useEffect(() => {
@@ -28,7 +33,7 @@ export function useResponsive(): ResponsiveState {
       const width = window.innerWidth;
       const height = window.innerHeight;
 
-      setResponsiveState({
+      const newState = {
         isMobile: width < 768,
         isTablet: width >= 768 && width < 1024,
         isDesktop: width >= 1024,
@@ -37,7 +42,9 @@ export function useResponsive(): ResponsiveState {
         isLargeScreen: width >= 1024,
         screenWidth: width,
         screenHeight: height,
-      });
+      };
+
+      setResponsiveState(newState);
     };
 
     // Set initial state

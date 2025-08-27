@@ -21,15 +21,15 @@ export function useToast() {
 
   const showSuccess = useCallback((message: string) => {
     addToast('success', message);
-  }, [addToast]);
+  }, []);
 
   const showError = useCallback((message: string) => {
     addToast('error', message);
-  }, [addToast]);
+  }, []);
 
   const showWarning = useCallback((message: string) => {
     addToast('warning', message);
-  }, [addToast]);
+  }, []);
 
   return {
     toasts,

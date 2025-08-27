@@ -1,36 +1,68 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://supabase-pagluz-backend-new.ztdny5.easypanel.host';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 // Configuração base do fetch
 const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem('accessToken');
   
-  const config: RequestInit = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
-    ...options,
+  const method = (options.method || 'GET').toUpperCase();
+
+  const baseHeaders: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
+  // Só definir Content-Type quando houver body (POST/PUT/PATCH)
+  const contentTypeHeader = options.body ? { 'Content-Type': 'application/json' } : {};
+
+  const headers = {
+    ...baseHeaders,
+    ...contentTypeHeader,
+    ...(options.headers as any),
+  } as HeadersInit;
+
+  const config: RequestInit = {
+    ...options,
+    method,
+    headers,
+  };
+
+
   
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
     
-    // Se for erro 401, remover token inválido
-    if (response.status === 401) {
-      localStorage.removeItem('accessToken');
+    if (!response.ok) {
+      // Tentar fazer parsing da resposta de erro, mas não falhar se estiver vazia
+      let errorData = {};
+      try {
+        const errorText = await response.text();
+        if (errorText.trim()) {
+          errorData = JSON.parse(errorText);
+        }
+      } catch (parseError) {
+        // Se não conseguir fazer parse, usar dados básicos
+        errorData = { message: `HTTP error! status: ${response.status}` };
+      }
+      
+      const message = Array.isArray((errorData as any).message) 
+        ? (errorData as any).message.join(', ') 
+        : (errorData as any).message || `HTTP error! status: ${response.status}`;
+      
+      throw new Error(message);
     }
     
-    const message = Array.isArray(errorData.message) 
-      ? errorData.message.join(', ') 
-      : errorData.message || `HTTP error! status: ${response.status}`;
+    // Verificar se há conteúdo antes de fazer parsing
+    const responseText = await response.text();
+    if (!responseText.trim()) {
+      // Resposta vazia (comum em DELETE)
+      return null;
+    }
     
-    throw new Error(message);
+    const data = JSON.parse(responseText);
+    return data;
+  } catch (error) {
+    console.error(`❌ Erro na requisição para ${endpoint}:`, error);
+    throw error;
   }
-  
-  return response.json();
 };
 
 export const api = {

@@ -25,61 +25,32 @@ import {
   Leaf,
   Eye,
   ExternalLink,
-  UserCheck
+  UserCheck,
+  Download
 } from 'lucide-react';
 import PagluzLogo from './common/PagluzLogo';
-import { useApp } from '../context/AppContext';
+import { useToast } from '../hooks/useToast';
 import { useClientesConsumidores } from '../hooks/useClientesConsumidores';
 import { useClientesGeradores } from '../hooks/useClientesGeradores';
 import { useRepresentantesComerciais } from '../hooks/useRepresentantesComerciais';
+import { api } from '../types/services/api';
 
-type ClienteConsumidor = {
-  id: string;
-  name: string;
-  cpfCnpj: string;
-  ucNumber: string;
-  concessionaire: string;
-  city: string;
-  state: string;
-  consumerType: string;
-  phase: string;
-  averageMonthlyConsumption: number;
-  discountOffered: number;
-  status: string;
-  generatorId?: string | null;
-  allocatedPercentage?: number;
-  representanteId?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-type ClienteGerador = {
-  id: string;
-  ownerName: string;
-  cpfCnpj: string;
-  sourceType: string;
-  installedPower: number;
-  concessionaire: string;
-  ucNumber: string;
-  city: string;
-  state: string;
-  status: string;
-  observations?: string;
-  createdAt?: string;
-  updatedAt?: string;
-};
+import { Consumer, ConsumerType, PhaseType, ConsumerStatus, Generator, SourceType, GeneratorStatus } from '../types';
 
 export default function ClientesConsumidores() {
-  const { toast } = useApp();
+  const toast = useToast();
   const {
     clientes: clientesConsumidores,
     loading,
     error,
+    filters,
     createCliente,
     updateCliente,
     deleteCliente,
     allocateToGenerator,
-    deallocateFromGenerator
+    deallocateFromGenerator,
+    updateFilters,
+    clearFilters
   } = useClientesConsumidores();
   
   const { clientes: geradores, loading: loadingGeradores } = useClientesGeradores();
@@ -87,44 +58,26 @@ export default function ClientesConsumidores() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editingClient, setEditingClient] = useState<ClienteConsumidor | null>(null);
+  const [editingClient, setEditingClient] = useState<Consumer | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('todos');
   const [filterTipo, setFilterTipo] = useState<string>('todos');
-  const [filterGerador, setFilterGerador] = useState<string>('todos'); // Novo filtro por gerador
+  const [filterGerador, setFilterGerador] = useState<string>('todos');
   const [showGeneratorDetails, setShowGeneratorDetails] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
 
-  const filteredClientes = (clientesConsumidores || []).filter(cliente => {
-    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+  // Removido useEffect que causava loop infinito
 
-    // Verifica se o termo de busca corresponde ao nome, CPF/CNPJ ou cidade do consumidor
-    let matchesSearch = cliente.name.toLowerCase().includes(lowerCaseSearchTerm) ||
-                        cliente.cpfCnpj.includes(lowerCaseSearchTerm) ||
-                        cliente.city.toLowerCase().includes(lowerCaseSearchTerm);
-
-    // Se o consumidor estiver alocado a um gerador, verifica se o termo de busca corresponde ao nome do gerador
-    if (cliente.generatorId) {
-      const geradorAtrelado = geradores.find(g => g.id === cliente.generatorId);
-      if (geradorAtrelado && geradorAtrelado.ownerName.toLowerCase().includes(lowerCaseSearchTerm)) {
-        matchesSearch = true;
-      }
-    }
-    
-    const matchesStatusFilter = filterStatus === 'todos' || cliente.status === filterStatus;
-    const matchesTipoFilter = filterTipo === 'todos' || cliente.consumerType === filterTipo;
-    const matchesGeradorFilter = filterGerador === 'todos' || cliente.generatorId === filterGerador;
-    
-    return matchesSearch && matchesStatusFilter && matchesTipoFilter && matchesGeradorFilter;
-  });
+  const filteredClientes = clientesConsumidores || [];
 
   // Stats para dashboard
   const stats = {
     total: clientesConsumidores?.length || 0,
-    alocados: clientesConsumidores?.filter(c => c.status === 'ALLOCATED').length || 0,
-    disponiveis: clientesConsumidores?.filter(c => c.status === 'AVAILABLE').length || 0,
+    alocados: clientesConsumidores?.filter(c => c.status === ConsumerStatus.ALLOCATED).length || 0,
+    disponiveis: clientesConsumidores?.filter(c => c.status === ConsumerStatus.AVAILABLE).length || 0,
     consumoTotal: clientesConsumidores?.reduce((acc, c) => acc + c.averageMonthlyConsumption, 0) || 0
   };
 
-  const handleEdit = (cliente: ClienteConsumidor) => {
+  const handleEdit = (cliente: Consumer) => {
     setEditingClient(cliente);
     setShowModal(true);
   };
@@ -143,6 +96,85 @@ export default function ClientesConsumidores() {
   const handleAddNew = () => {
     setEditingClient(null);
     setShowModal(true);
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setFilterStatus('todos');
+    setFilterTipo('todos');
+    setFilterGerador('todos');
+    clearFilters();
+  };
+
+  const exportConsumidores = async () => {
+    try {
+      // Tentar exportação via API primeiro
+      try {
+        const queryParams = new URLSearchParams();
+        if (searchTerm) queryParams.append('search', searchTerm);
+        if (filterStatus !== 'todos') queryParams.append('status', filterStatus);
+        if (filterTipo !== 'todos') queryParams.append('consumerType', filterTipo);
+        if (filterGerador !== 'todos') queryParams.append('generatorId', filterGerador);
+        
+        const endpoint = `/consumers/export${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        const response = await api.get(endpoint);
+        
+        // Criar e baixar arquivo CSV
+        const csvContent = response.csvContent || '';
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `consumidores-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.showSuccess('Consumidores exportados com sucesso!');
+        return;
+      } catch (apiError) {
+        // Se a API falhar, fazer exportação local
+
+      }
+      
+      // Exportação local como fallback
+      const consumidoresParaExportar = filteredClientes;
+      
+      // Criar CSV localmente
+      const headers = ['Nome', 'CPF/CNPJ', 'Tipo', 'Consumo Mensal (kWh)', 'Status', 'Gerador Vinculado', 'Porcentagem Alocada', 'Cidade', 'Estado', 'Data de Criação'];
+      const csvRows = [
+        headers.join(','),
+        ...consumidoresParaExportar.map(consumidor => [
+          `"${consumidor.name}"`,
+          `"${consumidor.cpfCnpj}"`,
+          consumidor.consumerType,
+          consumidor.averageMonthlyConsumption || 0,
+          consumidor.status,
+          consumidor.generatorId ? getGeneratorName(consumidor.generatorId, geradores) : 'N/A',
+          consumidor.allocatedPercentage || 0,
+          `"${consumidor.city}"`,
+          `"${consumidor.state}"`,
+          consumidor.createdAt
+        ].join(','))
+      ];
+      
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `consumidores-local-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.showSuccess(`Consumidores exportados localmente (${consumidoresParaExportar.length} registros)`);
+    } catch (error) {
+      console.error('Erro ao exportar consumidores:', error);
+      toast.showError('Erro ao exportar consumidores');
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -180,7 +212,7 @@ export default function ClientesConsumidores() {
     return { icon: config.icon, color: config.color };
   };
 
-  const getGeneratorName = (generatorId: string, geradoresList: ClienteGerador[]) => {
+  const getGeneratorName = (generatorId: string, geradoresList: Generator[]) => {
     if (!generatorId || !geradoresList) return 'N/A';
     const gerador = geradoresList.find(g => g.id === generatorId);
     return gerador ? gerador.ownerName : 'ID não encontrado';
@@ -431,6 +463,20 @@ export default function ClientesConsumidores() {
                   <X className="h-4 w-4" />
                 </button>
               )}
+              <button
+                onClick={exportConsumidores}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-xl transition-colors duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl"
+              >
+                <Download className="h-5 w-5" />
+                <span>Exportar</span>
+              </button>
+              <button
+                onClick={handleClearFilters}
+                className="bg-slate-600 hover:bg-slate-700 text-white px-6 py-4 rounded-xl transition-colors duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl"
+              >
+                <X className="h-5 w-5" />
+                <span>Limpar</span>
+              </button>
             </div>
           </div>
         </div>
@@ -494,16 +540,16 @@ export default function ClientesConsumidores() {
                         </div>
                       </td>
                       <td className="px-4 py-6">
-                        {cliente.representanteId ? (
+                        {cliente.representativeId ? (
                           <div className="space-y-1">
                             <div className="text-xs text-slate-900 flex items-center">
                               <UserCheck className="h-3 w-3 mr-1 text-blue-600" />
                               <span className="font-medium">
-                                {representantes.find(rep => rep.id === cliente.representanteId)?.name || 'Representante não encontrado'}
+                                {representantes.find(rep => rep.id === cliente.representativeId)?.name || 'Representante não encontrado'}
                               </span>
                             </div>
                             <div className="text-xs text-slate-500">
-                              {representantes.find(rep => rep.id === cliente.representanteId)?.city}, {representantes.find(rep => rep.id === cliente.representanteId)?.state}
+                              {representantes.find(rep => rep.id === cliente.representativeId)?.city}, {representantes.find(rep => rep.id === cliente.representativeId)?.state}
                             </div>
                           </div>
                         ) : (
@@ -568,7 +614,7 @@ export default function ClientesConsumidores() {
                             <span className="text-xs font-bold text-green-600">{cliente.discountOffered}%</span>
                             <span className="text-xs text-slate-500 ml-1">desconto</span>
                           </div>
-                          {cliente.status === 'ALLOCATED' && (
+                          {cliente.status === ConsumerStatus.ALLOCATED && (
                             <div className="flex items-center">
                               <div className="w-full bg-slate-200 rounded-full h-2 mr-2">
                                 <div 
@@ -692,7 +738,7 @@ function ConsumidorModal({
   onClose, 
   onSave 
 }: { 
-  cliente: ClienteConsumidor | null; 
+          cliente: Consumer | null; 
   onClose: () => void; 
   onSave: (data: any, action: 'create' | 'update' | 'allocate' | 'deallocate' | 'reallocate') => void;
 }) {
@@ -711,10 +757,10 @@ function ConsumidorModal({
     phase: cliente?.phase || 'SINGLE',
     averageMonthlyConsumption: cliente?.averageMonthlyConsumption || 0,
     discountOffered: cliente?.discountOffered || 0,
-    status: cliente?.status || 'AVAILABLE',
+            status: cliente?.status || ConsumerStatus.AVAILABLE,
     generatorId: cliente?.generatorId || '',
     allocatedPercentage: cliente?.allocatedPercentage || 0,
-    representanteId: cliente?.representanteId || ''
+    representativeId: cliente?.representativeId || ''
   });
 
   useEffect(() => {
@@ -730,7 +776,7 @@ function ConsumidorModal({
 
   const handleStatusChange = (newStatus: string) => {
     const updatedFormData = { ...formData, status: newStatus };
-    if (newStatus === 'AVAILABLE') {
+            if (newStatus === ConsumerStatus.AVAILABLE) {
       updatedFormData.generatorId = '';
       updatedFormData.allocatedPercentage = 0;
     }
@@ -740,7 +786,7 @@ function ConsumidorModal({
   const calcularCapacidadeDisponivel = (geradorId: string) => {
     let totalAlocado = 0;
     todosConsumidores.forEach(consumidor => {
-      if (consumidor.status === 'ALLOCATED' && 
+              if (consumidor.status === ConsumerStatus.ALLOCATED && 
           consumidor.generatorId === geradorId &&
           consumidor.id !== cliente?.id) {
         totalAlocado += consumidor.allocatedPercentage || 0;
@@ -760,9 +806,9 @@ function ConsumidorModal({
     const dataToSend = {
       ...formData,
       phase: phaseMapping[formData.phase as keyof typeof phaseMapping] || formData.phase,
-      generatorId: formData.status === 'ALLOCATED' && formData.generatorId ? formData.generatorId : null,
-      allocatedPercentage: formData.status === 'ALLOCATED' ? formData.allocatedPercentage : null,
-      representanteId: formData.representanteId || null
+              generatorId: formData.status === ConsumerStatus.ALLOCATED && formData.generatorId ? formData.generatorId : null,
+        allocatedPercentage: formData.status === ConsumerStatus.ALLOCATED ? formData.allocatedPercentage : null,
+      representativeId: formData.representativeId || null
     };
 
     if (cliente) {
@@ -771,11 +817,11 @@ function ConsumidorModal({
       const originalGeneratorId = cliente.generatorId;
       const newGeneratorId = formData.generatorId;
 
-      if (newStatus === 'ALLOCATED' && originalStatus === 'ALLOCATED' && newGeneratorId && newGeneratorId !== originalGeneratorId) {
+      if (newStatus === ConsumerStatus.ALLOCATED && originalStatus === ConsumerStatus.ALLOCATED && newGeneratorId && newGeneratorId !== originalGeneratorId) {
         onSave({ id: cliente.id, generatorId: newGeneratorId, allocatedPercentage: formData.allocatedPercentage }, 'reallocate');
-      } else if (newStatus === 'ALLOCATED' && originalStatus === 'AVAILABLE' && newGeneratorId) {
+      } else if (newStatus === ConsumerStatus.ALLOCATED && originalStatus === ConsumerStatus.AVAILABLE && newGeneratorId) {
         onSave({ id: cliente.id, generatorId: newGeneratorId, allocatedPercentage: formData.allocatedPercentage }, 'allocate');
-      } else if (newStatus === 'AVAILABLE' && originalStatus === 'ALLOCATED') {
+      } else if (newStatus === ConsumerStatus.AVAILABLE && originalStatus === ConsumerStatus.ALLOCATED) {
         onSave({ id: cliente.id, formData: dataToSend }, 'deallocate');
       } else {
         onSave({ id: cliente.id, ...dataToSend }, 'update');
@@ -1013,8 +1059,8 @@ function ConsumidorModal({
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Representante Comercial</label>
                   <select
-                    value={formData.representanteId}
-                    onChange={(e) => setFormData({ ...formData, representanteId: e.target.value })}
+                                      value={formData.representativeId}
+                  onChange={(e) => setFormData({ ...formData, representativeId: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
                   >
                     <option value="">Sem representante</option>
@@ -1036,7 +1082,7 @@ function ConsumidorModal({
                   </p>
                 </div>
 
-                {formData.status === 'ALLOCATED' && (
+                {formData.status === ConsumerStatus.ALLOCATED && (
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Gerador Vinculado</label>

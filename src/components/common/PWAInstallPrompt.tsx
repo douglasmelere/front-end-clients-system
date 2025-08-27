@@ -14,8 +14,9 @@ export default function PWAInstallPrompt() {
   useEffect(() => {
     // Verifica se já está instalado
     const checkIfInstalled = () => {
-      if (window.matchMedia('(display-mode: standalone)').matches || 
-          (window.navigator as any).standalone === true) {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
+                          (window.navigator as any).standalone === true;
+      if (isStandalone) {
         setIsInstalled(true);
       }
     };
@@ -46,18 +47,17 @@ export default function PWAInstallPrompt() {
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      return;
+    }
 
     try {
       await deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
       
       if (outcome === 'accepted') {
-        console.log('Usuário aceitou instalar a PWA');
         setIsInstalled(true);
         setShowInstallPrompt(false);
-      } else {
-        console.log('Usuário recusou instalar a PWA');
       }
       
       setDeferredPrompt(null);

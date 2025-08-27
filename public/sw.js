@@ -7,8 +7,7 @@ const STATIC_FILES = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icons/icon.svg'
 ];
 
 // Estratégia de cache: Network First para APIs, Cache First para assets estáticos
@@ -96,8 +95,8 @@ self.addEventListener('sync', (event) => {
 self.addEventListener('push', (event) => {
   const options = {
     body: event.data ? event.data.text() : 'Nova notificação da PagLuz',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    icon: '/icons/icon.svg',
+    badge: '/icons/icon.svg',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -107,12 +106,12 @@ self.addEventListener('push', (event) => {
       {
         action: 'explore',
         title: 'Ver',
-        icon: '/icons/icon-72x72.png'
+        icon: '/icons/icon.svg'
       },
       {
         action: 'close',
         title: 'Fechar',
-        icon: '/icons/icon-72x72.png'
+        icon: '/icons/icon.svg'
       }
     ]
   };

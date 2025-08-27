@@ -1,27 +1,43 @@
 
-import { useApp } from '../context/AppContext';
+import React, { useState } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { 
   LayoutDashboard,
-  Users, 
-  Factory, 
-  LogOut,
-  Settings,
-  Bell,
+  Factory,
+  Users,
   UserCheck,
+  FileText,
+  LogOut,
   Menu,
-  X
+  X,
+  Bell,
+  Settings
 } from 'lucide-react';
 import PagluzLogo from './common/PagluzLogo';
 import { useResponsive } from '../hooks/useResponsive';
-import { useState } from 'react';
 
-export default function Sidebar() {
-  const { state, dispatch, auth } = useApp();
+interface SidebarProps {
+  currentView: 'dashboard' | 'geradores' | 'consumidores' | 'representantes' | 'usuarios' | 'logs';
+  onViewChange: (view: 'dashboard' | 'geradores' | 'consumidores' | 'representantes' | 'usuarios' | 'logs') => void;
+}
+
+export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
+  const { user, logout, loading } = useAuth();
   const { isMobile, isTablet } = useResponsive();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleLogout = () => {
-    auth.logout();
+
+
+  // Removido shouldShowMobile - não está sendo usado
+  
+
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Erro no logout:', error);
+    }
   };
 
   const toggleMobileMenu = () => {
@@ -59,25 +75,61 @@ export default function Sidebar() {
     }
   ];
 
+  // Menu items específicos para SUPER_ADMIN
+  const superAdminMenuItems = [
+    {
+      id: 'usuarios',
+      label: 'Usuários do Sistema',
+      icon: Users,
+      view: 'usuarios' as const,
+      description: 'Gestão de usuários'
+    },
+    {
+      id: 'logs',
+      label: 'Logs de Atividade',
+      icon: Bell,
+      view: 'logs' as const,
+      description: 'Auditoria do sistema'
+    }
+  ];
+
+  // Determinar quais menus mostrar baseado no role do usuário
+  const userRole = user?.role;
+  const isSuperAdmin = userRole === 'SUPER_ADMIN';
+  const allMenuItems = isSuperAdmin ? [...menuItems, ...superAdminMenuItems] : menuItems;
+
   return (
     <>
       {/* Mobile Menu Button */}
-      {(isMobile || isTablet) && (
+      {isMobile && (
         <button
           onClick={toggleMobileMenu}
-          className="fixed top-4 left-4 z-50 p-2 bg-[#35cc20] text-white rounded-lg lg:hidden shadow-lg"
+          className="fixed top-4 left-4 p-3 bg-[#35cc20] text-white rounded-lg lg:hidden shadow-lg hover:bg-[#2bb018] transition-colors duration-200 z-[10001]"
         >
           {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
       )}
 
+      {/* Overlay para mobile */}
+      {isMobile && isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-[9999] lg:hidden"
+          onClick={toggleMobileMenu}
+        />
+      )}
+
       {/* Sidebar */}
-      <div className={`
-        ${isMobile || isTablet ? 'fixed inset-0 z-40 transform transition-transform duration-300 ease-in-out' : 'relative'}
-        ${isMobile || isTablet && !isMobileMenuOpen ? '-translate-x-full' : 'translate-x-0'}
-        bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 w-72 flex flex-col h-full shadow-2xl border-r border-slate-700
-        ${isMobile || isTablet ? 'shadow-2xl' : ''}
-      `}>
+      <div 
+        className={`
+          ${isMobile ? 'fixed left-0 top-0 h-full' : 'relative'}
+          bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 w-72 flex flex-col shadow-2xl border-r border-slate-700
+          transition-transform duration-300 ease-in-out
+        `}
+        style={{ 
+          zIndex: isMobile ? 10000 : 'auto',
+          transform: isMobile && !isMobileMenuOpen ? 'translateX(-100%)' : 'translateX(0)'
+        }}
+      >
       {/* Header com Logo da Pagluz */}
       <div className="p-6 border-b border-slate-700/50">
         <div className="flex items-center">
@@ -93,14 +145,14 @@ export default function Sidebar() {
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-3">
             Navegação Principal
           </h3>
-          {menuItems.map((item) => {
+          {allMenuItems.map((item) => {
             const Icon = item.icon;
-            const isActive = state.currentView === item.view;
+            const isActive = currentView === item.view;
             
             return (
               <button
                 key={item.id}
-                onClick={() => dispatch({ type: 'SET_VIEW', payload: item.view })}
+                onClick={() => onViewChange(item.view)}
                 className={`w-full flex items-center px-4 py-3.5 rounded-xl text-left transition-all duration-300 group relative ${
                   isActive
                     ? 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-400 shadow-lg border border-green-500/30'
@@ -167,36 +219,42 @@ export default function Sidebar() {
         <div className="flex items-center mb-4 p-3 rounded-xl bg-slate-700/30">
           <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
             <span className="text-white font-bold text-sm">
-              {auth.user?.name?.charAt(0) || auth.user?.email?.charAt(0) || 'A'}
+              {user?.name?.charAt(0) || user?.email?.charAt(0) || 'A'}
             </span>
           </div>
           <div className="ml-3 flex-1">
             <p className="text-sm font-semibold text-white">
-              {auth.user?.name || auth.user?.email}
+              {user?.name || user?.email}
             </p>
-            <p className="text-xs text-slate-400">Administrador</p>
+            <p className="text-xs text-slate-400">
+              {userRole === 'SUPER_ADMIN' ? 'Super Administrador' : 
+               userRole === 'ADMIN' ? 'Administrador' : 
+               userRole === 'MANAGER' ? 'Gerente' : 
+               userRole === 'OPERATOR' ? 'Operador' : 
+               userRole === 'REPRESENTATIVE' ? 'Representante' : 'Usuário'}
+            </p>
           </div>
           <div className="w-2 h-2 bg-green-400 rounded-full shadow-lg shadow-green-400/50"></div>
         </div>
         
         <button
           onClick={handleLogout}
-          className="w-full flex items-center px-4 py-3 text-slate-300 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-all duration-300 group border border-transparent hover:border-red-500/30"
+          disabled={loading}
+          className="w-full flex items-center px-4 py-3 text-slate-300 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-all duration-300 group border border-transparent hover:border-red-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="p-2 rounded-lg mr-3 bg-slate-700/50 text-slate-400 group-hover:bg-red-500/20 group-hover:text-red-400 transition-all duration-300">
-            <LogOut className="h-4 w-4" />
+            {loading ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <LogOut className="h-4 w-4" />
+            )}
           </div>
-          <span className="text-sm font-medium">Sair do Sistema</span>
+          <span className="text-sm font-medium">
+            {loading ? 'Saindo...' : 'Sair do Sistema'}
+          </span>
         </button>
       </div>
       
-      {/* Overlay para mobile */}
-      {(isMobile || isTablet) && isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={toggleMobileMenu}
-        />
-      )}
     </div>
     </>
   );

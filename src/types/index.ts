@@ -1,31 +1,113 @@
-// Interface do usuário
-export interface User {
+// Enums
+export enum UserRole {
+  SUPER_ADMIN = 'SUPER_ADMIN',
+  ADMIN = 'ADMIN',
+  MANAGER = 'MANAGER',
+  OPERATOR = 'OPERATOR',
+  REPRESENTATIVE = 'REPRESENTATIVE'
+}
+
+export enum RepresentativeStatus {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  PENDING_APPROVAL = 'PENDING_APPROVAL',
+  SUSPENDED = 'SUSPENDED'
+}
+
+export enum ConsumerStatus {
+  AVAILABLE = 'AVAILABLE',
+  ALLOCATED = 'ALLOCATED',
+  IN_PROCESS = 'IN_PROCESS',
+  CONVERTED = 'CONVERTED'
+}
+
+export enum ConsumerType {
+  RESIDENTIAL = 'RESIDENTIAL',
+  COMMERCIAL = 'COMMERCIAL',
+  INDUSTRIAL = 'INDUSTRIAL',
+  RURAL = 'RURAL',
+  PUBLIC_POWER = 'PUBLIC_POWER'
+}
+
+export enum PhaseType {
+  MONOPHASIC = 'MONOPHASIC',
+  BIPHASIC = 'BIPHASIC',
+  TRIPHASIC = 'TRIPHASIC'
+}
+
+export enum SourceType {
+  SOLAR = 'SOLAR',
+  HYDRO = 'HYDRO',
+  BIOMASS = 'BIOMASS',
+  WIND = 'WIND'
+}
+
+export enum GeneratorStatus {
+  UNDER_ANALYSIS = 'UNDER_ANALYSIS',
+  AWAITING_ALLOCATION = 'AWAITING_ALLOCATION',
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE'
+}
+
+// Interfaces de Autenticação
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  access_token: string;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role: UserRole;
+    isActive: boolean;
+  };
+}
+
+export interface CreateUserRequest {
+  name: string;
+  email: string;
+  password: string;
+  role: 'ADMIN' | 'MANAGER' | 'OPERATOR';
+}
+
+export interface UserProfile {
   id: string;
   email: string;
   name: string;
-  role: 'ADMIN' | 'USER';
+  role: UserRole;
+  isActive: boolean;
+  lastLoginAt: string;
+  loginCount: number;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-// Interfaces existentes dos clientes
-export interface ClienteGerador {
-  id: string;
-  ownerName: string;
+// Interfaces de Representantes
+export interface CreateRepresentativeRequest {
+  name: string;
+  email: string;
+  password: string;
   cpfCnpj: string;
-  sourceType: 'SOLAR' | 'HYDRO' | 'WIND' | 'BIOMASS';
-  installedPower: number; // KW/h
-  concessionaire: string;
-  ucNumber: string;
+  phone: string;
   city: string;
   state: string;
-  status: 'UNDER_ANALYSIS' | 'AWAITING_ALLOCATION';
-  observations?: string;
-  createdAt: string;
-  updatedAt: string;
+  commissionRate?: number;
+  specializations?: string[];
+  notes?: string;
 }
 
-export interface RepresentanteComercial {
+export interface Representative {
   id: string;
   name: string;
   email: string;
@@ -33,15 +115,38 @@ export interface RepresentanteComercial {
   phone: string;
   city: string;
   state: string;
-  commissionRate: number; // Taxa de comissão em %
-  status: 'ACTIVE' | 'INACTIVE' | 'PENDING_APPROVAL';
-  specializations: string[]; // Especializações (ex: "SOLAR", "HYDRO", "RESIDENTIAL")
-  notes?: string;
+  commissionRate: number;
+  specializations: string[];
+  status: RepresentativeStatus;
+  notes: string | null;
   createdAt: string;
   updatedAt: string;
+  lastLoginAt: string | null;
+  loginCount: number;
+  _count: {
+    Consumer: number;
+  };
 }
 
-export interface ClienteConsumidor {
+// Interfaces de Consumidores
+export interface CreateConsumerRequest {
+  name: string;
+  cpfCnpj: string;
+  ucNumber: string;
+  concessionaire: string;
+  city: string;
+  state: string;
+  consumerType: ConsumerType;
+  phase: PhaseType;
+  averageMonthlyConsumption: number;
+  discountOffered: number;
+  status?: ConsumerStatus;
+  allocatedPercentage?: number;
+  generatorId?: string;
+  representativeId?: string;
+}
+
+export interface Consumer {
   id: string;
   name: string;
   cpfCnpj: string;
@@ -49,136 +154,153 @@ export interface ClienteConsumidor {
   concessionaire: string;
   city: string;
   state: string;
-  consumerType: 'RESIDENTIAL' | 'COMMERCIAL' | 'RURAL' | 'INDUSTRIAL' | 'PUBLIC_POWER';
-  phase: 'SINGLE' | 'TWO' | 'THREE';
-  averageMonthlyConsumption: number; // KW/h
-  discountOffered: number; // %
-  status: 'AVAILABLE' | 'ALLOCATED';
-  allocatedPercentage?: number; // %
-  generatorId?: string;
-  representanteId?: string; // ID do representante comercial
+  consumerType: ConsumerType;
+  phase: PhaseType;
+  averageMonthlyConsumption: number;
+  discountOffered: number;
+  status: ConsumerStatus;
+  allocatedPercentage: number | null;
+  generatorId: string | null;
+  representativeId: string | null;
   createdAt: string;
   updatedAt: string;
+  generator?: Generator;
+  Representative?: Representative;
 }
 
-export type Cliente = ClienteGerador | ClienteConsumidor;
-
-export interface AppState {
-  currentView: 'dashboard' | 'geradores' | 'consumidores' | 'representantes';
-  loading: boolean;
-  isAuthenticated: boolean;
+// Interfaces de Geradores
+export interface CreateGeneratorRequest {
+  ownerName: string;
+  cpfCnpj: string;
+  sourceType: SourceType;
+  installedPower: number;
+  concessionaire: string;
+  ucNumber: string;
+  city: string;
+  state: string;
+  status?: GeneratorStatus;
+  observations?: string;
 }
 
-// Interfaces para o dashboard
-export interface DashboardSummary {
+export interface Generator {
+  id: string;
+  ownerName: string;
+  cpfCnpj: string;
+  sourceType: SourceType;
+  installedPower: number;
+  concessionaire: string;
+  ucNumber: string;
+  city: string;
+  state: string;
+  status: GeneratorStatus;
+  observations: string | null;
+  createdAt: string;
+  updatedAt: string;
+  consumers: Consumer[];
+}
+
+// Interfaces de Dashboard
+export interface AdminDashboard {
   totalGenerators: number;
   totalConsumers: number;
   totalInstalledPower: number;
-  newClientsThisWeek: number;
-  newGeneratorsThisWeek: number;
-  newConsumersThisWeek: number;
-}
-
-export interface StateDistribution {
-  state: string;
-  generators: number;
-  consumers: number;
-}
-
-export interface RecentActivity {
-  id: string;
-  type: 'generator' | 'consumer';
-  subtype: string;
-  name: string;
-  createdAt: string;
-}
-
-export interface GeneratorStatus {
-  underAnalysis: number;
-  awaitingAllocation: number;
-}
-
-export interface CapacityUtilization {
-  // Soma total da capacidade de todos os geradores cadastrados
-  totalGeneratorsCapacity: number;
-  
-  // Capacidade dos geradores que estão em análise (status: 'UNDER_ANALYSIS')
-  underAnalysisCapacity: number;
-  
-  // Soma total do consumo médio mensal de todos os consumidores
-  totalConsumption: number;
-}
-
-export interface DashboardInsights {
   totalMonthlyConsumption: number;
-  
-  // Taxa de alocação baseada em KW/h alocados
-  kwAllocationRate: number;
-  
-  // Média dos descontos oferecidos
-  averageDiscountOffered: number;
-  
-  capacityUtilization: CapacityUtilization;
-  generatorStatus: GeneratorStatus;
+  allocationRate: number;
+  generatorsBySource: Array<{
+    sourceType: SourceType;
+    count: number;
+    totalPower: number;
+  }>;
+  consumersByType: Array<{
+    consumerType: ConsumerType;
+    count: number;
+    totalConsumption: number;
+  }>;
 }
 
-export interface DashboardData {
-  summary: DashboardSummary;
-  stateDistribution: StateDistribution[];
-  recentActivity: RecentActivity[];
-  insights: DashboardInsights;
+export interface RepresentativeDashboard {
+  stats: {
+    totalConsumers: number;
+    totalKwh: number;
+    allocatedKwh: number;
+    pendingKwh: number;
+    allocationRate: number;
+    estimatedMonthlySavings: number;
+  };
+  consumersByStatus: {
+    allocated: {
+      count: number;
+      totalKwh: number;
+      consumers: Consumer[];
+    };
+    inProcess: {
+      count: number;
+      totalKwh: number;
+      consumers: Consumer[];
+    };
+    converted: {
+      count: number;
+      totalKwh: number;
+      consumers: Consumer[];
+    };
+    available: {
+      count: number;
+      totalKwh: number;
+      consumers: Consumer[];
+    };
+  };
+  geographicDistribution: Array<{
+    state: string;
+    count: number;
+    totalKwh: number;
+  }>;
+  monthlyEvolution: Array<{
+    month: string;
+    newConsumers: number;
+    totalKwh: number;
+  }>;
+  recentActivity: Consumer[];
 }
 
-// Exemplo de como calcular os valores no backend
-export interface DashboardCalculations {
-  // Para totalGeneratorsCapacity
-  calculateTotalGeneratorsCapacity: (generators: ClienteGerador[]) => number;
-  
-  // Para underAnalysisCapacity
-  calculateUnderAnalysisCapacity: (generators: ClienteGerador[]) => number;
-  
-  // Para totalConsumption
-  calculateTotalConsumption: (consumers: ClienteConsumidor[]) => number;
-  
-  // Para kwAllocationRate
-  calculateKWAllocationRate: (generators: ClienteGerador[], consumers: ClienteConsumidor[]) => number;
-  
-  // Para averageDiscountOffered
-  calculateAverageDiscountOffered: (consumers: ClienteConsumidor[]) => number;
+// Interfaces de Auditoria
+export interface AuditLog {
+  id: string;
+  userId: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  oldValues: any | null;
+  newValues: any | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  metadata: any | null;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: UserRole;
+  };
 }
 
-// Implementação de exemplo das funções de cálculo
-export const dashboardCalculations: DashboardCalculations = {
-  calculateTotalGeneratorsCapacity: (generators: ClienteGerador[]) => {
-    return generators.reduce((total, generator) => total + generator.installedPower, 0);
-  },
-  
-  calculateUnderAnalysisCapacity: (generators: ClienteGerador[]) => {
-    return generators
-      .filter(generator => generator.status === 'UNDER_ANALYSIS')
-      .reduce((total, generator) => total + generator.installedPower, 0);
-  },
-  
-  calculateTotalConsumption: (consumers: ClienteConsumidor[]) => {
-    return consumers.reduce((total, consumer) => total + consumer.averageMonthlyConsumption, 0);
-  },
-  
-  calculateKWAllocationRate: (generators: ClienteGerador[], consumers: ClienteConsumidor[]) => {
-    const totalGeneratorCapacity = generators.reduce((total, generator) => total + generator.installedPower, 0);
-    const totalAllocatedConsumption = consumers
-      .filter(consumer => consumer.status === 'ALLOCATED')
-      .reduce((total, consumer) => {
-        const allocatedAmount = consumer.averageMonthlyConsumption * (consumer.allocatedPercentage || 0) / 100;
-        return total + allocatedAmount;
-      }, 0);
-    
-    return totalGeneratorCapacity > 0 ? (totalAllocatedConsumption / totalGeneratorCapacity) * 100 : 0;
-  },
-  
-  calculateAverageDiscountOffered: (consumers: ClienteConsumidor[]) => {
-    if (consumers.length === 0) return 0;
-    
-    const totalDiscount = consumers.reduce((total, consumer) => total + consumer.discountOffered, 0);
-    return totalDiscount / consumers.length;
-  }
-};
+export interface AuditLogsResponse {
+  logs: AuditLog[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+// Estado da Aplicação
+export interface AppState {
+  currentView: 'dashboard' | 'geradores' | 'consumidores' | 'representantes' | 'usuarios' | 'logs';
+  isLoading: boolean;
+  error: string | null;
+}
+
+export interface AppAction {
+  type: 'SET_VIEW' | 'SET_LOADING' | 'SET_ERROR' | 'CLEAR_ERROR';
+  payload?: any;
+}

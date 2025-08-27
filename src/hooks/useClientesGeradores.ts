@@ -1,95 +1,140 @@
-import { useState, useCallback } from 'react';
-import { useApi, useApiMutation } from './useApi';
-import { clienteGeradorService, ClienteGeradorFilters } from '../types/services/clienteGeradorService';
-import { ClienteGerador } from '../types';
+import { useState, useCallback, useEffect } from 'react';
+import { Generator } from '../types';
+import { api } from '../types/services/api';
+import { useAuth } from './useAuth';
 
-export function useClientesGeradores(filters?: ClienteGeradorFilters) {
-  const [currentFilters, setCurrentFilters] = useState<ClienteGeradorFilters>(filters || {});
-  
-  // Query para listar clientes
-  const {
-    data: clientes,
-    loading: listLoading,
-    error: listError,
-    refetch
-  } = useApi(
-    () => clienteGeradorService.getAll(currentFilters),
-    [currentFilters]
-  );
+export interface ClienteGeradorFilters {
+  search?: string;
+  status?: string;
+  sourceType?: string;
+  city?: string;
+  state?: string;
+}
 
-  // Mutations
-  const createMutation = useApiMutation<ClienteGerador>();
-  const updateMutation = useApiMutation<ClienteGerador>();
-  const deleteMutation = useApiMutation<void>();
+export function useClientesGeradores() {
+  const [clientes, setClientes] = useState<Generator[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<ClienteGeradorFilters>({});
+  const { isAuthenticated } = useAuth();
+
+  const fetchClientes = useCallback(async (appliedFilters?: ClienteGeradorFilters) => {
+    if (!isAuthenticated) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const queryParams = new URLSearchParams();
+      
+      if (appliedFilters) {
+        Object.entries(appliedFilters).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value.toString());
+        });
+      }
+      
+      const endpoint = `/generators${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+      const data = await api.get(endpoint);
+      setClientes(data);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao carregar geradores';
+      setError(message);
+      console.error('Erro ao buscar geradores:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  const refetch = useCallback(async () => {
+    await fetchClientes();
+  }, [fetchClientes]);
 
   const updateFilters = useCallback((newFilters: ClienteGeradorFilters) => {
-    setCurrentFilters(newFilters);
+    setFilters(newFilters);
+    fetchClientes(newFilters);
+  }, [fetchClientes]);
+
+  const clearFilters = useCallback(() => {
+    const clearedFilters: ClienteGeradorFilters = {};
+    setFilters(clearedFilters);
+    fetchClientes(clearedFilters);
+  }, [fetchClientes]);
+
+  const createCliente = useCallback(async (cliente: Omit<Generator, 'id' | 'createdAt' | 'updatedAt' | 'consumers'>) => {
+    try {
+      setLoading(true);
+      const newCliente = await api.post('/generators', cliente);
+      setClientes(prev => [...prev, newCliente]);
+      return newCliente;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao criar gerador';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const createCliente = useCallback(async (cliente: Omit<ClienteGerador, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const updateCliente = useCallback(async (cliente: Partial<Generator> & { id: string }) => {
     try {
-      const result = await createMutation.mutate(() => 
-        clienteGeradorService.create(cliente)
-      );
-      // Recarrega a lista após criar
-      await refetch();
-      return result;
-    } catch (error) {
-      console.error('Erro ao criar cliente gerador:', error);
-      throw error;
-    }
-  }, [createMutation, refetch]);
-
-  const updateCliente = useCallback(async (cliente: Partial<ClienteGerador> & { id: string }) => {
-    try {
+      setLoading(true);
       const { id, ...data } = cliente;
-      const result = await updateMutation.mutate(() => 
-        clienteGeradorService.update(id, data)
-      );
-      // Recarrega a lista após atualizar
-      await refetch();
-      return result;
-    } catch (error) {
-      console.error('Erro ao atualizar cliente gerador:', error);
-      throw error;
+      const updatedCliente = await api.patch(`/generators/${id}`, data);
+      setClientes(prev => prev.map(c => c.id === id ? updatedCliente : c));
+      return updatedCliente;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao atualizar gerador';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
     }
-  }, [updateMutation, refetch]);
+  }, []);
 
   const deleteCliente = useCallback(async (id: string) => {
     try {
-      await deleteMutation.mutate(() => 
-        clienteGeradorService.delete(id)
-      );
-      // Recarrega a lista após deletar
-      await refetch();
-    } catch (error) {
-      console.error('Erro ao deletar cliente gerador:', error);
-      throw error;
+      setLoading(true);
+      await api.delete(`/generators/${id}`);
+      setClientes(prev => prev.filter(c => c.id !== id));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao deletar gerador';
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
     }
-  }, [deleteMutation, refetch]);
+  }, []);
+
+  // Carregar dados iniciais
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchClientes();
+    }
+  }, [isAuthenticated]);
 
   return {
-    // Dados
-    clientes: clientes || [],
-    loading: listLoading || createMutation.loading || updateMutation.loading || deleteMutation.loading,
-    error: listError || createMutation.error || updateMutation.error || deleteMutation.error,
-    
-    // Funções
+    clientes,
+    loading,
+    error,
+    filters,
     refetch,
     updateFilters,
-    currentFilters,
+    clearFilters,
+    currentFilters: filters,
     createCliente,
     updateCliente,
     deleteCliente,
-    
-    // Estados individuais de loading
-    createLoading: createMutation.loading,
-    updateLoading: updateMutation.loading,
-    deleteLoading: deleteMutation.loading
+    createLoading: loading,
+    updateLoading: loading,
+    deleteLoading: loading
   };
 }
 
 // Hook para estatísticas
 export function useClienteGeradorStats() {
-  return useApi(() => clienteGeradorService.getStatistics());
+  return {
+    data: null,
+    loading: false,
+    error: null,
+    refetch: async () => {}
+  };
 }

@@ -14,12 +14,16 @@ import {
   Calendar,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Download
 } from 'lucide-react';
 import { useRepresentantesComerciais } from '../hooks/useRepresentantesComerciais';
-import { RepresentanteComercial, RepresentanteComercialCreate, RepresentanteComercialUpdate } from '../types';
+import { Representative, RepresentativeStatus } from '../types';
+import { RepresentanteComercialCreate, RepresentanteComercialUpdate } from '../types/services/representanteComercialService';
 import LoadingSpinner from './common/LoadingSpinner';
 import ErrorMessage from './common/ErrorMessage';
+import { useToast } from '../hooks/useToast';
+import { api } from '../types/services/api';
 
 export default function RepresentantesComerciais() {
   const {
@@ -34,9 +38,11 @@ export default function RepresentantesComerciais() {
     applyFilters,
     clearFilters
   } = useRepresentantesComerciais();
+  
+  const toast = useToast();
 
   const [showModal, setShowModal] = useState(false);
-  const [editingRepresentante, setEditingRepresentante] = useState<RepresentanteComercial | null>(null);
+  const [editingRepresentante, setEditingRepresentante] = useState<Representative | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
@@ -49,6 +55,7 @@ export default function RepresentantesComerciais() {
   const [formData, setFormData] = useState<RepresentanteComercialCreate>({
     name: '',
     email: '',
+    password: '',
     cpfCnpj: '',
     phone: '',
     city: '',
@@ -76,6 +83,19 @@ export default function RepresentantesComerciais() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validação da senha
+    if (!editingRepresentante) {
+      if (!formData.password || formData.password.trim() === '') {
+        alert('A senha é obrigatória para novos representantes');
+        return;
+      }
+      if (formData.password.length < 6) {
+        alert('A senha deve ter pelo menos 6 caracteres');
+        return;
+      }
+    }
+    
     try {
       if (editingRepresentante) {
         await updateRepresentante(editingRepresentante.id, formData);
@@ -89,11 +109,12 @@ export default function RepresentantesComerciais() {
     }
   };
 
-  const handleEdit = (representante: RepresentanteComercial) => {
+  const handleEdit = (representante: Representative) => {
     setEditingRepresentante(representante);
     setFormData({
       name: representante.name,
       email: representante.email,
+      password: '', // Password is not editable
       cpfCnpj: representante.cpfCnpj,
       phone: representante.phone,
       city: representante.city,
@@ -115,7 +136,7 @@ export default function RepresentantesComerciais() {
     }
   };
 
-  const handleStatusChange = async (id: string, newStatus: 'ACTIVE' | 'INACTIVE' | 'PENDING_APPROVAL') => {
+  const handleStatusChange = async (id: string, newStatus: RepresentativeStatus) => {
     try {
       await updateStatus(id, newStatus);
     } catch (error) {
@@ -130,6 +151,85 @@ export default function RepresentantesComerciais() {
     applyFilters(activeFilters);
   };
 
+  const exportRepresentantes = async () => {
+    try {
+      // Tentar exportação via API primeiro
+      try {
+        const queryParams = new URLSearchParams();
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) queryParams.append(key, value.toString());
+        });
+        
+        const endpoint = `/representatives/export${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+        const response = await api.get(endpoint);
+        
+        // Criar e baixar arquivo CSV
+        const csvContent = response.csvContent || '';
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `representantes-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.showSuccess('Representantes exportados com sucesso!');
+        return;
+      } catch (apiError) {
+        // Se a API falhar, fazer exportação local
+
+      }
+      
+      // Exportação local como fallback
+      const representantesParaExportar = filters && Object.keys(filters).length > 0 
+        ? representantes.filter(rep => {
+            // Aplicar filtros localmente
+            if (filters.search && !rep.name.toLowerCase().includes(filters.search.toLowerCase())) return false;
+            if (filters.status && rep.status !== filters.status) return false;
+            if (filters.state && rep.state !== filters.state) return false;
+            if (filters.specialization && !rep.specializations.includes(filters.specialization)) return false;
+            return true;
+          })
+        : representantes;
+      
+      // Criar CSV localmente
+      const headers = ['Nome', 'Email', 'CPF/CNPJ', 'Telefone', 'Cidade', 'Estado', 'Taxa de Comissão', 'Especializações', 'Status', 'Data de Criação'];
+      const csvRows = [
+        headers.join(','),
+        ...representantesParaExportar.map(rep => [
+          `"${rep.name}"`,
+          `"${rep.email}"`,
+          `"${rep.cpfCnpj || ''}"`,
+          `"${rep.phone || ''}"`,
+          `"${rep.city || ''}"`,
+          `"${rep.state || ''}"`,
+          rep.commissionRate || 0,
+          `"${(rep.specializations || []).join('; ')}"`,
+          rep.status,
+          rep.createdAt
+        ].join(','))
+      ];
+      
+      const csvContent = csvRows.join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `representantes-local-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.showSuccess(`Representantes exportados localmente (${representantesParaExportar.length} registros)`);
+    } catch (error) {
+      console.error('Erro ao exportar representantes:', error);
+      toast.showError('Erro ao exportar representantes');
+    }
+  };
+
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingRepresentante(null);
@@ -140,6 +240,7 @@ export default function RepresentantesComerciais() {
     setFormData({
       name: '',
       email: '',
+      password: '',
       cpfCnpj: '',
       phone: '',
       city: '',
@@ -209,7 +310,7 @@ export default function RepresentantesComerciais() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-slate-600">Ativos</p>
-                    <p className="text-2xl font-bold text-green-600">{statistics.byStatus?.ACTIVE || 0}</p>
+                    <p className="text-2xl font-bold text-green-600">{statistics.byStatus?.[RepresentativeStatus.ACTIVE] || 0}</p>
                   </div>
                   <div className="p-3 bg-green-100 rounded-xl">
                     <CheckCircle className="h-6 w-6 text-green-600" />
@@ -235,7 +336,7 @@ export default function RepresentantesComerciais() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-slate-600">Pendentes</p>
-                    <p className="text-2xl font-bold text-yellow-600">{statistics.byStatus?.PENDING_APPROVAL || 0}</p>
+                    <p className="text-2xl font-bold text-yellow-600">{statistics.byStatus?.[RepresentativeStatus.PENDING_APPROVAL] || 0}</p>
                   </div>
                   <div className="p-3 bg-yellow-100 rounded-xl">
                     <Clock className="h-6 w-6 text-yellow-600" />
@@ -299,6 +400,13 @@ export default function RepresentantesComerciais() {
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
               Aplicar Filtros
+            </button>
+            <button
+              onClick={exportRepresentantes}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Exportar
             </button>
             <button
               onClick={() => {
@@ -374,9 +482,9 @@ export default function RepresentantesComerciais() {
                         value={representante.status}
                         onChange={(e) => handleStatusChange(representante.id, e.target.value as any)}
                         className={`px-3 py-1 rounded-full text-xs font-medium border-0 focus:ring-2 focus:ring-green-500 ${
-                          representante.status === 'ACTIVE' 
-                            ? 'bg-green-100 text-green-800' 
-                            : representante.status === 'INACTIVE'
+                                          representante.status === RepresentativeStatus.ACTIVE
+                  ? 'bg-green-100 text-green-800'
+                  : representante.status === RepresentativeStatus.INACTIVE
                             ? 'bg-red-100 text-red-800'
                             : 'bg-yellow-100 text-yellow-800'
                         }`}
@@ -445,6 +553,20 @@ export default function RepresentantesComerciais() {
                     required
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Senha {editingRepresentante ? '(deixe em branco para manter)' : '*'}
+                  </label>
+                  <input
+                    type="password"
+                    required={!editingRepresentante}
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder={editingRepresentante ? "Deixe em branco para manter a senha atual" : "Digite a senha (mín. 6 caracteres)"}
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   />
                 </div>

@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { authService, LoginCredentials } from '../types/services/authService';
-import { User } from '../types';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { authService } from '../types/services/authService';
+import { User, LoginRequest, LoginResponse } from '../types';
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -13,6 +13,7 @@ export function useAuth() {
 
   const validateStoredToken = async () => {
     const token = authService.getStoredToken();
+    
     if (!token) {
       setLoading(false);
       return;
@@ -20,22 +21,41 @@ export function useAuth() {
 
     try {
       const userData = await authService.validateToken();
-      setUser(userData);
+      
+      // Mapear a resposta para incluir campos obrigatórios
+      const userWithDefaults = {
+        ...userData,
+        createdAt: userData.createdAt || new Date().toISOString(),
+        updatedAt: userData.updatedAt || new Date().toISOString()
+      };
+      
+      setUser(userWithDefaults);
     } catch (error) {
-      console.error('Token inválido:', error);
+      console.error('❌ useAuth - Token inválido:', error);
       authService.clearToken();
+      setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const login = async (credentials: LoginCredentials) => {
+  const login = useCallback(async (credentials: LoginRequest) => {
     setLoading(true);
     setError(null);
 
     try {
       const response = await authService.login(credentials);
-      setUser(response.user);
+      
+      // Mapear a resposta para incluir campos obrigatórios
+      const userWithDefaults = {
+        ...response.user,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Definir usuário imediatamente após login bem-sucedido
+      setUser(userWithDefaults);
+      
       return response;
     } catch (error: any) {
       let errorMessage = 'Erro ao fazer login';
@@ -57,27 +77,37 @@ export function useAuth() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const logout = async () => {
-    setLoading(true);
+  const logout = useCallback(async () => {
     try {
+      // Limpar estado imediatamente para feedback visual
+      setUser(null);
+      setLoading(true);
+      
+      // Tentar fazer logout na API
       await authService.logout();
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
-    } finally {
-      setUser(null);
+      // Mesmo com erro, garantir que o token seja limpo
       authService.clearToken();
+    } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  return {
+  const isAuthenticated = useMemo(() => !loading && !!user, [loading, user]);
+
+  const result = {
     user,
     loading,
     error,
     login,
     logout,
-    isAuthenticated: !!user
+    isAuthenticated
   };
+
+  // Removido log que pode causar re-renders
+
+  return result;
 }

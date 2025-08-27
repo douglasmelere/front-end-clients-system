@@ -1,18 +1,8 @@
 import { api } from './api';
-import { User } from '../index';
-
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-export interface LoginResponse {
-  user: User;
-  access_token: string;
-}
+import { User, LoginRequest, LoginResponse } from '../index';
 
 export const authService = {
-  async login(credentials: LoginCredentials): Promise<LoginResponse> {
+  async login(credentials: LoginRequest): Promise<LoginResponse> {
     try {
       const response = await api.post('/auth/login', credentials);
       
@@ -42,15 +32,23 @@ export const authService = {
 */
 
   async logout(): Promise<void> {
-  // Como não há endpoint de logout, apenas limpar o token
-  this.clearToken();
-},
+    try {
+      // Tentar fazer logout na API (se o endpoint existir)
+      await api.post('/auth/logout', {});
+    } catch (error) {
+      // Se não houver endpoint ou der erro, continuar
+    } finally {
+      // Sempre limpar o token local
+      this.clearToken();
+    }
+  },
 
   async validateToken(): Promise<User> {
     try {
       const response = await api.get('/auth/profile');
       return response;
     } catch (error) {
+      console.error('❌ authService - Erro na validação do token:', error);
       this.clearToken();
       throw error;
     }

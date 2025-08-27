@@ -1,17 +1,17 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useMemo } from 'react';
 import { AppState } from '../types';
 import { useAuth } from '../hooks/useAuth';
-import { useToast } from '../hooks/useToast';
-import Toast from '../components/common/Toast';
 
 type AppAction =
-  | { type: 'SET_VIEW'; payload: 'dashboard' | 'geradores' | 'consumidores' | 'representantes' }
-  | { type: 'SET_LOADING'; payload: boolean };
+  | { type: 'SET_VIEW'; payload: 'dashboard' | 'geradores' | 'consumidores' | 'representantes' | 'usuarios' | 'logs' }
+  | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_ERROR'; payload: string | null }
+  | { type: 'CLEAR_ERROR' };
 
 const initialState: AppState = {
   currentView: 'dashboard',
-  loading: false,
-  isAuthenticated: false
+  isLoading: false,
+  error: null
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -24,7 +24,17 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_LOADING':
       return {
         ...state,
-        loading: action.payload
+        isLoading: action.payload
+      };
+    case 'SET_ERROR':
+      return {
+        ...state,
+        error: action.payload
+      };
+    case 'CLEAR_ERROR':
+      return {
+        ...state,
+        error: null
       };
     default:
       return state;
@@ -34,34 +44,31 @@ function appReducer(state: AppState, action: AppAction): AppState {
 const AppContext = createContext<{
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
-  auth: ReturnType<typeof useAuth>;
-  toast: ReturnType<typeof useToast>;
+  user: ReturnType<typeof useAuth>['user'];
+  loading: ReturnType<typeof useAuth>['loading'];
+  isAuthenticated: ReturnType<typeof useAuth>['isAuthenticated'];
+  login: ReturnType<typeof useAuth>['login'];
+  logout: ReturnType<typeof useAuth>['logout'];
 } | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const auth = useAuth();
-  const toast = useToast();
 
-  // Atualizar estado de autenticação baseado no hook useAuth
-  const updatedState = {
-    ...state,
-    isAuthenticated: auth.isAuthenticated
-  };
+  // Memoizar o valor do contexto para evitar re-renders desnecessários
+  const contextValue = useMemo(() => ({
+    state, 
+    dispatch, 
+    user: auth.user,
+    loading: auth.loading,
+    isAuthenticated: auth.isAuthenticated,
+    login: auth.login,
+    logout: auth.logout
+  }), [state, auth.user, auth.loading, auth.isAuthenticated, auth.login, auth.logout]);
+
   return (
-    <AppContext.Provider value={{ state: updatedState, dispatch, auth, toast }}>
+    <AppContext.Provider value={contextValue}>
       {children}
-      {/* Renderizar toasts */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
-        {toast.toasts.map((toastItem) => (
-          <Toast
-            key={toastItem.id}
-            type={toastItem.type}
-            message={toastItem.message}
-            onClose={() => toast.removeToast(toastItem.id)}
-          />
-        ))}
-      </div>
     </AppContext.Provider>
   );
 }

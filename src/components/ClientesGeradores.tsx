@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
+import { useToast } from '../hooks/useToast';
 import { useClientesGeradores } from '../hooks/useClientesGeradores';
 import { useClientesConsumidores } from '../hooks/useClientesConsumidores';
-import { ClienteGerador } from '../types';
+import { Generator } from '../types';
 import {
   Plus,
   Search,
@@ -27,7 +27,7 @@ import {
 import PagluzLogo from './common/PagluzLogo';
 
 export default function ClientesGeradores() {
-  const { toast } = useApp();
+  const toast = useToast();
   const {
     clientes: clientesGeradores,
     loading,
@@ -41,7 +41,7 @@ export default function ClientesGeradores() {
   
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [editingClient, setEditingClient] = useState<ClienteGerador | null>(null);
+  const [editingClient, setEditingClient] = useState<Generator | null>(null);
   const [filterStatus, setFilterStatus] = useState('todos');
   const [filterSourceType, setFilterSourceType] = useState('todos');
 
@@ -59,7 +59,7 @@ export default function ClientesGeradores() {
   };
 
   // Função para determinar o status real do gerador baseado na alocação
-  const getStatusReal = (cliente: ClienteGerador) => {
+  const getStatusReal = (cliente: Generator) => {
     const porcentagemAlocada = calcularPorcentagemAlocada(cliente.id);
     
     if (porcentagemAlocada >= 100) {
@@ -90,7 +90,7 @@ export default function ClientesGeradores() {
     potenciaTotal: clientesGeradores?.reduce((acc, c) => acc + (c.installedPower || 0), 0) || 0
   };
 
-  const handleEdit = (cliente: ClienteGerador) => {
+  const handleEdit = (cliente: Generator) => {
     setEditingClient(cliente);
     setShowModal(true);
   };
@@ -111,7 +111,7 @@ export default function ClientesGeradores() {
     setShowModal(true);
   };
 
-  const getStatusBadge = (cliente: ClienteGerador) => {
+  const getStatusBadge = (cliente: Generator) => {
     const statusReal = getStatusReal(cliente);
     const porcentagemAlocada = calcularPorcentagemAlocada(cliente.id);
     
@@ -313,24 +313,24 @@ export default function ClientesGeradores() {
             <table className="min-w-full">
               <thead>
                 <tr className="bg-gradient-to-r from-slate-100 to-slate-200 border-b border-slate-300">
-                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Gerador</th> {/* Alterado de px-6 para px-4 */}
-                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Tipo/Potência</th> {/* Alterado de px-6 para px-4 */}
-                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Localização</th> {/* Alterado de px-6 para px-4 */}
-                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Consumidores</th> {/* Alterado de px-6 para px-4 */}
-                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Alocação</th> {/* Alterado de px-6 para px-4 */}
-                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Status</th> {/* Alterado de px-6 para px-4 */}
-                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Ações</th> {/* Alterado de px-6 para px-4 */}
+                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Gerador</th>
+                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Tipo/Potência</th>
+                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Localização</th>
+                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Consumidores</th>
+                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Alocação</th>
+                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-5 text-left text-sm font-bold text-slate-700 uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {filteredClientes.map((cliente) => {
                   const porcentagemAlocada = calcularPorcentagemAlocada(cliente.id);
-                                              const sourceConfig = { color: 'text-yellow-500', bg: 'bg-yellow-100' };
+                  const sourceConfig = { color: 'text-yellow-500', bg: 'bg-yellow-100' };
                   const consumidoresVinculados = getConsumidoresVinculados(cliente.id);
                   
                   return (
                     <tr key={cliente.id} className="hover:bg-slate-50 transition-all duration-200 group">
-                      <td className="px-4 py-6"> {/* Alterado de px-6 para px-4 */}
+                      <td className="px-4 py-6">
                         <div className="flex items-center">
                           <div className={`flex-shrink-0 h-14 w-14 rounded-2xl ${sourceConfig.bg} flex items-center justify-center shadow-lg`}>
                             {renderSourceTypeIcon(cliente.sourceType, `h-7 w-7 ${sourceConfig.color}`)}
@@ -343,7 +343,7 @@ export default function ClientesGeradores() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-6"> {/* Alterado de px-6 para px-4 */}
+                      <td className="px-4 py-6">
                         <div className="space-y-2">
                           <div className="text-sm text-slate-900 capitalize flex items-center">
                             {renderSourceTypeIcon(cliente.sourceType, `h-4 w-4 mr-2 ${sourceConfig.color}`)}
@@ -356,7 +356,7 @@ export default function ClientesGeradores() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-6"> {/* Alterado de px-6 para px-4 */}
+                      <td className="px-4 py-6">
                         <div className="space-y-2">
                           <div className="text-sm text-slate-900 flex items-center">
                             <MapPin className="h-4 w-4 mr-2 text-slate-400" />
@@ -366,7 +366,7 @@ export default function ClientesGeradores() {
                           <div className="text-sm text-slate-500">{cliente.concessionaire}</div>
                         </div>
                       </td>
-                      <td className="px-4 py-6"> {/* Alterado de px-6 para px-4 */}
+                      <td className="px-4 py-6">
                         <div className="space-y-2">
                           <div className="flex items-center">
                             <Users className="h-4 w-4 mr-2 text-slate-400" />
@@ -382,7 +382,7 @@ export default function ClientesGeradores() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-6"> {/* Alterado de px-6 para px-4 */}
+                      <td className="px-4 py-6">
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-semibold text-slate-900">
@@ -404,10 +404,10 @@ export default function ClientesGeradores() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-6"> {/* Alterado de px-6 para px-4 */}
+                      <td className="px-4 py-6">
                         {getStatusBadge(cliente)}
                       </td>
-                      <td className="px-4 py-6"> {/* Alterado de px-6 para px-4 */}
+                      <td className="px-4 py-6">
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => handleEdit(cliente)}
@@ -488,7 +488,7 @@ function GeradorModal({
   onClose, 
   onSave 
 }: { 
-  cliente: ClienteGerador | null; 
+  cliente: Generator | null; 
   onClose: () => void; 
   onSave: (cliente: any) => void;
 }) {
